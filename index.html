@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Twitch Channel Tracker</title>
+    <link rel="stylesheet" href="https://polyextended.github.io/nav.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+</head>
+<body>
+
+    <header class="z-depth-1">
+        <nav class="z-depth-0 backer-dark">
+            <div class="nav-wrapper container">
+                <ul class="left">
+                    <li><a href="https://polyextended.github.io/">Home</a></li>
+                    <li><a href="https://polyextended.github.io/live/">PolyLive</a></li>
+                    <li><a href="https://polyextended.github.io/streamlookup/">PolyLookup</a></li>
+                </ul>
+            </div>
+        </nav>
+    </header>
+
+    <div class="container">
+        <h1 class="center-align">Twitch Channel Information</h1>
+
+        <div class="row">
+            <div class="input-field col s12">
+                <input type="text" id="channelInput" class="validate">
+                <label for="channelInput">Enter Twitch Channel Name</label>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col s12" id="channelInfo">
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+
+    <script>
+        const clientId = '2oag632o0mp6n85h3mismr2ocsa1jip';
+        const accessToken = '62ly1aqjnymr30sn6yga5xpxuo4yi9';
+
+        document.getElementById('channelInput').addEventListener('change', function() {
+            const channelName = this.value;
+            getChannelInfo(channelName);
+        });
+
+        // Call getBannedUsers every 3 minutes
+        setInterval(() => {
+            getBannedUsers();
+        }, 3 * 60 * 1000);
+
+        async function getChannelInfo(channelName) {
+            try {
+                const bannedUsers = await getBannedUsers();
+
+                if (bannedUsers.includes(channelName)) {
+                    throw new Error('User is banned');
+                }
+
+                const [user, follows, stream] = await Promise.all([
+                    getUserInfo(channelName),
+                    getFollowers(channelName),
+                    getStreamInfo(channelName),
+                ]);
+
+                const isPartner = user && user.broadcaster_type === 'partner';
+                const isAffiliate = user && user.broadcaster_type === 'affiliate';
+                const joinDate = user ? new Date(user.created_at).toLocaleDateString() : 'N/A';
+                const isMature = user && user.mature;
+
+                const infoText = `
+                    <p>Channel Name: ${channelName}</p>
+                    <p>Is Partner: ${isPartner}</p>
+                    <p>Is Affiliate: ${isAffiliate}</p>
+                    <p>Join Date: ${joinDate}</p>
+                    <p>Is Mature: ${isMature}</p>
+                    <p>Followers: ${follows}</p>
+                    <p>Is Live: ${stream}</p>
+                `;
+
+                document.getElementById('channelInfo').innerHTML = infoText;
+            } catch (error) {
+                console.error('Error fetching channel info:', error);
+                document.getElementById('channelInfo').innerHTML = `<p>Error: ${error.message}</p>`;
+            }
+        }
+
+        async function getUserInfo(channelName) {
+            const response = await fetch(`https://api.twitch.tv/helix/users?login=${channelName}`, {
+                headers: {
+                    'Client-ID': clientId,
+                    'Authorization': `Bearer ${accessToken}`,
+                },
+            });
+
+            const data = await response.json();
+            return data.data[0];
+        }
+
+        async function getFollowers(channelName) {
+            const response = await fetch(`https://api.twitch.tv/helix/users/follows?to_id=${channelName}`, {
+                headers: {
+                    'Client-ID': clientId,
+                    'Authorization': `Bearer ${accessToken}`,
+                },
+            });
+
+            const data = await response.json();
+            return data.total;
+        }
+
+        async function getStreamInfo(channelName) {
+            const response = await fetch(`https://api.twitch.tv/helix/streams?user_id=${channelName}`, {
+                headers: {
+                    'Client-ID': clientId,
+                    'Authorization': `Bearer ${accessToken}`,
+                },
+            });
+
+            const data = await response.json();
+            return data.data.length > 0 ? 'Yes' : 'No';
+        }
+
+        async function getBannedUsers() {
+            try {
+                const response = await fetch('https://polyextended.github.io/banned.json');
+                const data = await response.json();
+                return data.BannedUsers || [];
+            } catch (error) {
+                console.error('Error fetching banned users:', error);
+                return [];
+            }
+        }
+    </script>
+
+</body>
+</html>
